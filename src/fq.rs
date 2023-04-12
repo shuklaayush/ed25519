@@ -180,9 +180,11 @@ const R3: Fq = Fq([
     0x0000_0000_0000_0000,
 ]);
 
+// TODO
 // 2^S * t = MODULUS - 1 with t odd
 const S: u32 = 32;
 
+// TODO
 /// GENERATOR^t where t * 2^s + 1 = q
 /// with t odd. In other words, this
 /// is a 2^s root of unity.
@@ -195,6 +197,14 @@ const ROOT_OF_UNITY: Fq = Fq([
     0x5b1b_4c80_1819_d7ec,
     0x0af5_3ae3_52a3_1e64,
     0x5bf3_adda_19e9_b27b,
+]);
+
+/// sqrt(-1) mod q = 2^((q - 1) / 4) mod q
+const SQRT_MINUS_ONE: Fq = Fq::from_raw([
+    0xc4ee1b274a0ea0b0,
+    0x2f431806ad2fe478,
+    0x2b4d00993dfbd7a7,
+    0x2b8324804fc1df0b,
 ]);
 
 impl Default for Fq {
@@ -344,54 +354,28 @@ impl Fq {
         Fq::montgomery_reduce(r0, r1, r2, r3, r4, r5, r6, r7)
     }
 
-    /// TODO: r mod 8 = 5
     /// Computes the square root of this element, if it exists.
-    pub fn sqrt(&self) -> CtOption<Self> {
-        // Tonelli-Shank's algorithm for q mod 16 = 1
-        // https://eprint.iacr.org/2012/685.pdf (page 12, algorithm 5)
-
-        // w = self^((t - 1) // 2)
-        //   = self^6104339283789297388802252303364915521546564123189034618274734669823
-        let w = self.pow_vartime(&[
-            0x7fff_2dff_7fff_ffff,
-            0x04d0_ec02_a9de_d201,
-            0x94ce_bea4_199c_ec04,
-            0x0000_0000_39f6_d3a9,
+    fn sqrt(&self) -> CtOption<Self> {
+        // Because q = 5 (mod 8)
+        // sqrt can be done with only one exponentiation and some checks,
+        // via the computation of  
+        //      = self^((q + 3) // 8) (mod q)
+        //        OR
+        //      = self^((q + 3) // 8) * sqrt(-1) (mod q) 
+        //      = self^((q + 3) // 8) * (2^((q - 1) / 4)) (mod q)
+        let x1 = self.pow(&[
+            0xffff_ffff_ffff_fffe,
+            0xffff_ffff_ffff_ffff,
+            0xffff_ffff_ffff_ffff,
+            0x0fff_ffff_ffff_ffff,
         ]);
 
-        let mut v = S;
-        let mut x = self * w;
-        let mut b = x * w;
+        let choice1 = x1.square().ct_eq(&self);
+        let choice2 = x1.square().ct_eq(&-self);
 
-        // Initialize z as the 2^S root of unity.
-        let mut z = ROOT_OF_UNITY;
+        let sqrt = Self::conditional_select(&x1, &(x1 * SQRT_MINUS_ONE), choice2);
 
-        for max_v in (1..=S).rev() {
-            let mut k = 1;
-            let mut tmp = b.square();
-            let mut j_less_than_v: Choice = 1.into();
-
-            for j in 2..max_v {
-                let tmp_is_one = tmp.ct_eq(&Fq::one());
-                let squared = Fq::conditional_select(&tmp, &z, tmp_is_one).square();
-                tmp = Fq::conditional_select(&squared, &tmp, tmp_is_one);
-                let new_z = Fq::conditional_select(&z, &squared, tmp_is_one);
-                j_less_than_v &= !j.ct_eq(&v);
-                k = u32::conditional_select(&j, &k, tmp_is_one);
-                z = Fq::conditional_select(&z, &new_z, j_less_than_v);
-            }
-
-            let result = x * z;
-            x = Fq::conditional_select(&result, &x, b.ct_eq(&Fq::one()));
-            z = z.square();
-            b *= z;
-            v = k;
-        }
-
-        CtOption::new(
-            x,
-            (x * x).ct_eq(self), // Only return Some if it's the square root.
-        )
+        CtOption::new(sqrt, choice1 | choice2)
     }
 
     /// Exponentiates `self` by `by`, where `by` is a
@@ -431,101 +415,17 @@ impl Fq {
 
     /// Computes the multiplicative inverse of this element,
     /// failing if the element is zero.
+    // TODO: Use https://github.com/kwantam/addchain
     pub fn invert(&self) -> CtOption<Self> {
-        #[inline(always)]
-        fn square_assign_multi(n: &mut Fq, num_times: usize) {
-            for _ in 0..num_times {
-                *n = n.square();
-            }
-        }
-        // found using https://github.com/kwantam/addchain
-        let mut t0 = self.square();
-        let mut t1 = t0 * self;
-        let mut t16 = t0.square();
-        let mut t6 = t16.square();
-        let mut t5 = t6 * t0;
-        t0 = t6 * t16;
-        let mut t12 = t5 * t16;
-        let mut t2 = t6.square();
-        let mut t7 = t5 * t6;
-        let mut t15 = t0 * t5;
-        let mut t17 = t12.square();
-        t1 *= t17;
-        let mut t3 = t7 * t2;
-        let t8 = t1 * t17;
-        let t4 = t8 * t2;
-        let t9 = t8 * t7;
-        t7 = t4 * t5;
-        let t11 = t4 * t17;
-        t5 = t9 * t17;
-        let t14 = t7 * t15;
-        let t13 = t11 * t12;
-        t12 = t11 * t17;
-        t15 *= &t12;
-        t16 *= &t15;
-        t3 *= &t16;
-        t17 *= &t3;
-        t0 *= &t17;
-        t6 *= &t0;
-        t2 *= &t6;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t17;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t16;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t15;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t14;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t13;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t12;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t11;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t8;
-        square_assign_multi(&mut t0, 8);
-        t0 *= self;
-        square_assign_multi(&mut t0, 14);
-        t0 *= &t9;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t8;
-        square_assign_multi(&mut t0, 15);
-        t0 *= &t7;
-        square_assign_multi(&mut t0, 10);
-        t0 *= &t6;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t5;
-        square_assign_multi(&mut t0, 16);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 7);
-        t0 *= &t4;
-        square_assign_multi(&mut t0, 9);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t3;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 8);
-        t0 *= &t2;
-        square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
-        square_assign_multi(&mut t0, 5);
-        t0 *= &t1;
+        // Exponentiate by q - 2
+        let t = self.pow_vartime(&[
+            0xffff_ffff_ffff_ffeb,
+            0xffff_ffff_ffff_ffff,
+            0xffff_ffff_ffff_ffff,
+            0x7fff_ffff_ffff_ffff,
+        ]);
 
-        CtOption::new(t0, !self.ct_eq(&Self::zero()))
+        CtOption::new(t, !self.is_zero())
     }
 
     #[inline(always)]
@@ -802,7 +702,6 @@ fn test_inv() {
     assert_eq!(inv, INV);
 }
 
-#[cfg(feature = "std")]
 #[test]
 fn test_debug() {
     assert_eq!(
@@ -815,7 +714,7 @@ fn test_debug() {
     );
     assert_eq!(
         format!("{:?}", R2),
-        "0x1824b159acc5056f998c4fefecbc4ff55884b7fa0003480200000001fffffffe"
+        "0x0000000000000000000000000000000000000000000000000000000000000026"
     );
 }
 
@@ -850,16 +749,16 @@ fn test_to_bytes() {
     assert_eq!(
         R2.to_bytes(),
         [
-            254, 255, 255, 255, 1, 0, 0, 0, 2, 72, 3, 0, 250, 183, 132, 88, 245, 79, 188, 236, 239,
-            79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24
+            38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ]
     );
 
     assert_eq!(
         (-&Fq::one()).to_bytes(),
         [
-            0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
+            236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127
         ]
     );
 }
@@ -886,8 +785,8 @@ fn test_from_bytes() {
 
     assert_eq!(
         Fq::from_bytes(&[
-            254, 255, 255, 255, 1, 0, 0, 0, 2, 72, 3, 0, 250, 183, 132, 88, 245, 79, 188, 236, 239,
-            79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24
+            38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
         ])
         .unwrap(),
         R2
@@ -896,8 +795,8 @@ fn test_from_bytes() {
     // -1 should work
     assert!(bool::from(
         Fq::from_bytes(&[
-            0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
+            236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127
         ])
         .is_some()
     ));
@@ -905,8 +804,8 @@ fn test_from_bytes() {
     // modulus is invalid
     assert!(bool::from(
         Fq::from_bytes(&[
-            1, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
+            237, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127
         ])
         .is_none()
     ));
@@ -914,22 +813,15 @@ fn test_from_bytes() {
     // Anything larger than the modulus is invalid
     assert!(bool::from(
         Fq::from_bytes(&[
-            2, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115
+            238, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127
         ])
         .is_none()
     ));
     assert!(bool::from(
         Fq::from_bytes(&[
-            1, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 58, 51, 72, 125, 157, 41, 83, 167, 237, 115
-        ])
-        .is_none()
-    ));
-    assert!(bool::from(
-        Fq::from_bytes(&[
-            1, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 116
+            237, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 128
         ])
         .is_none()
     ));
@@ -976,8 +868,8 @@ fn test_from_bytes_wide_r2() {
     assert_eq!(
         R2,
         Fq::from_bytes_wide(&[
-            254, 255, 255, 255, 1, 0, 0, 0, 2, 72, 3, 0, 250, 183, 132, 88, 245, 79, 188, 236, 239,
-            79, 140, 153, 111, 5, 197, 172, 89, 177, 36, 24, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            38, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ])
     );
@@ -988,9 +880,9 @@ fn test_from_bytes_wide_negative_one() {
     assert_eq!(
         -&Fq::one(),
         Fq::from_bytes_wide(&[
-            0, 0, 0, 0, 255, 255, 255, 255, 254, 91, 254, 255, 2, 164, 189, 83, 5, 216, 161, 9, 8,
-            216, 57, 51, 72, 125, 157, 41, 83, 167, 237, 115, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            236, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 
+            255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 255, 127, 0, 0, 0, 0, 0, 0, 0, 
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         ])
     );
 }
@@ -999,10 +891,10 @@ fn test_from_bytes_wide_negative_one() {
 fn test_from_bytes_wide_maximum() {
     assert_eq!(
         Fq([
-            0xc62c_1805_439b_73b1,
-            0xc2b9_551e_8ced_218e,
-            0xda44_ec81_daf9_a422,
-            0x5605_aa60_1c16_2e79,
+            0x0000_0000_0000_d632,
+            0x0000_0000_0000_0000,
+            0x0000_0000_0000_0000,
+            0x0000_0000_0000_0000,
         ]),
         Fq::from_bytes_wide(&[0xff; 64])
     );
@@ -1018,10 +910,10 @@ fn test_zero() {
 
 #[cfg(test)]
 const LARGEST: Fq = Fq([
-    0xffff_ffff_0000_0000,
-    0x53bd_a402_fffe_5bfe,
-    0x3339_d808_09a1_d805,
-    0x73ed_a753_299d_7d48,
+    0xffff_ffff_ffff_ffec,
+    0xffff_ffff_ffff_ffff,
+    0xffff_ffff_ffff_ffff,
+    0x7fff_ffff_ffff_ffff,
 ]);
 
 #[test]
@@ -1032,10 +924,10 @@ fn test_addition() {
     assert_eq!(
         tmp,
         Fq([
-            0xffff_fffe_ffff_ffff,
-            0x53bd_a402_fffe_5bfe,
-            0x3339_d808_09a1_d805,
-            0x73ed_a753_299d_7d48,
+            0xffff_ffff_ffff_ffeb,
+            0xffff_ffff_ffff_ffff,
+            0xffff_ffff_ffff_ffff,
+            0x7fff_ffff_ffff_ffff,
         ])
     );
 
@@ -1152,10 +1044,10 @@ fn test_inversion() {
 #[test]
 fn test_invert_is_pow() {
     let q_minus_2 = [
-        0xffff_fffe_ffff_ffff,
-        0x53bd_a402_fffe_5bfe,
-        0x3339_d808_09a1_d805,
-        0x73ed_a753_299d_7d48,
+        0xffff_ffff_ffff_ffeb,
+        0xffff_ffff_ffff_ffff,
+        0xffff_ffff_ffff_ffff,
+        0x7fff_ffff_ffff_ffff,
     ];
 
     let mut r1 = R;
@@ -1201,17 +1093,17 @@ fn test_sqrt() {
         square -= Fq::one();
     }
 
-    assert_eq!(49, none_count);
+    assert_eq!(51, none_count);
 }
 
 #[test]
 fn test_from_raw() {
     assert_eq!(
         Fq::from_raw([
-            0x0001_ffff_fffd,
-            0x5884_b7fa_0003_4802,
-            0x998c_4fef_ecbc_4ff5,
-            0x1824_b159_acc5_056f,
+            0x0000_0000_0000_0025,
+            0x0000_0000_0000_0000,
+            0x0000_0000_0000_0000,
+            0x0000_0000_0000_0000,
         ]),
         Fq::from_raw([0xffff_ffff_ffff_ffff; 4])
     );

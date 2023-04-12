@@ -16,7 +16,8 @@
 //!
 //! This crate uses the `subtle` crate to perform constant-time operations.
 
-#![no_std]
+// TODO: Uncomment
+// #![no_std] 
 // Catch documentation errors caused by code changes.
 #![deny(rustdoc::broken_intra_doc_links)]
 #![deny(missing_debug_implementations)]
