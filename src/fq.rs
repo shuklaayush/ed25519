@@ -353,7 +353,7 @@ impl Fq {
     }
 
     /// Computes the square root of this element, if it exists.
-    fn sqrt(&self) -> CtOption<Self> {
+    pub fn sqrt(&self) -> CtOption<Self> {
         // Because q = 5 (mod 8)
         // sqrt can be done with only one exponentiation and some checks,
         // via the computation of

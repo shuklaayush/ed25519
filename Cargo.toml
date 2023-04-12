@@ -38,14 +38,14 @@ default = ["alloc", "bits"]
 alloc = ["ff/alloc", "group/alloc"]
 bits = ["ff/bits"]
 
-# [[bench]]
-# name = "fq_bench"
-# harness = false
+[[bench]]
+name = "fq_bench"
+harness = false
 
-# [[bench]]
-# name = "fr_bench"
-# harness = false
+[[bench]]
+name = "fr_bench"
+harness = false
 
-# [[bench]]
-# name = "point_bench"
-# harness = false
+[[bench]]
+name = "point_bench"
+harness = false
