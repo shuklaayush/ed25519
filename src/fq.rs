@@ -96,13 +96,13 @@ const MODULUS_LIMBS_32: [u32; 8] = [
 // The number of bits needed to represent the modulus.
 const MODULUS_BITS: u32 = 255;
 
-// TODO
-// GENERATOR = 7 (multiplicative generator of r-1 order, that is also quadratic nonresidue)
+// GENERATOR = 2 (multiplicative generator of q-1 order, that is also quadratic nonresidue)
+// It's derived with SageMath with: `GF(MODULUS).primitive_element()`.
 const GENERATOR: Fq = Fq([
-    0x0000_000e_ffff_fff1,
-    0x17e3_63d3_0018_9c0f,
-    0xff9c_5787_6f84_57b0,
-    0x3513_3220_8fc5_a8c4,
+    0x0000_0000_0000_004c,
+    0x0000_0000_0000_0000,
+    0x0000_0000_0000_0000,
+    0x0000_0000_0000_0000,
 ]);
 
 impl<'a> Neg for &'a Fq {
@@ -180,11 +180,9 @@ const R3: Fq = Fq([
     0x0000_0000_0000_0000,
 ]);
 
-// TODO
 // 2^S * t = MODULUS - 1 with t odd
-const S: u32 = 32;
+const S: u32 = 2;
 
-// TODO
 /// GENERATOR^t where t * 2^s + 1 = q
 /// with t odd. In other words, this
 /// is a 2^s root of unity.
@@ -193,10 +191,10 @@ const S: u32 = 32;
 /// of the q - 1 order multiplicative
 /// subgroup.
 const ROOT_OF_UNITY: Fq = Fq([
-    0xb9b5_8d8c_5f0e_466a,
-    0x5b1b_4c80_1819_d7ec,
-    0x0af5_3ae3_52a3_1e64,
-    0x5bf3_adda_19e9_b27b,
+    0x3b58_07d4_fe2b_db04,
+    0x03f5_90fd_b51b_e9ed,
+    0x6d6e_16bf_3362_02d1,
+    0x7577_6b0b_d6c7_1ba8,
 ]);
 
 /// sqrt(-1) mod q = 2^((q - 1) / 4) mod q

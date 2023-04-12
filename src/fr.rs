@@ -97,26 +97,24 @@ const MODULUS_LIMBS_32: [u32; 8] = [
 // The number of bits needed to represent the modulus.
 const MODULUS_BITS: u32 = 253;
 
-// TODO
-// GENERATOR = 6 (multiplicative generator of r-1 order, that is also quadratic nonresidue)
+// GENERATOR = 2 (multiplicative generator of r-1 order, that is also quadratic nonresidue)
+/// It's derived with SageMath with: `GF(MODULUS).primitive_element()`.
 const GENERATOR: Fr = Fr([
-    0x720b_1b19_d49e_a8f1,
-    0xbf4a_a361_01f1_3a58,
-    0x5fa8_cc96_8193_ccbb,
-    0x0e70_cbdc_7dcc_f3ac,
+    0x55c5_ffce_be3b_564d,
+    0x78ff_be0a_4404_020b,
+    0xffff_ffff_ffff_fffd,
+    0x0fff_ffff_ffff_ffff,
 ]);
 
-// TODO
 // 2^S * t = MODULUS - 1 with t odd
-const S: u32 = 1;
+const S: u32 = 2;
 
-// TODO
 // 2^S root of unity computed by GENERATOR^t
 const ROOT_OF_UNITY: Fr = Fr([
-    0xaa9f_02ab_1d61_24de,
-    0xb352_4a64_6611_2932,
-    0x7342_2612_15ac_260b,
-    0x04d6_b87b_1da2_59e2,
+    0x7c79_0e32_b42f_0e7d,
+    0x4c8c_e706_a7ae_2cc8,
+    0xd738_23cc_9217_79ad,
+    0x0559_9959_893f_562a,
 ]);
 
 /// sqrt(-1) mod r = 2^((r - 1) / 4) mod r

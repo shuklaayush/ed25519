@@ -73,8 +73,8 @@ pub type Base = Fq;
 pub type Scalar = Fr;
 
 const FR_MODULUS_BYTES: [u8; 32] = [
-    183, 44, 247, 214, 94, 14, 151, 208, 130, 16, 200, 204, 147, 32, 104, 166, 0, 59, 52, 1, 1, 59,
-    103, 6, 169, 175, 51, 101, 234, 180, 125, 14,
+    237, 211, 245, 92, 26, 99, 18, 88, 214, 156, 247, 162, 222, 249, 222, 20, 0, 0, 0, 0, 
+    0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 16
 ];
 
 /// This represents a Ed25519 point in the affine `(u, v)`
@@ -397,20 +397,20 @@ impl<'a, 'b> Mul<&'b Fr> for &'a ExtendedNielsPoint {
 
 impl_binops_multiplicative_mixed!(ExtendedNielsPoint, Fr, ExtendedPoint);
 
-// `d = -(10240/10241)`
+// `d = -(121665/121666)`
 const EDWARDS_D: Fq = Fq::from_raw([
-    0x0106_5fd6_d634_3eb1,
-    0x292d_7f6d_3757_9d26,
-    0xf5fd_9207_e6bd_7fd4,
-    0x2a93_18e7_4bfa_2b48,
+    0x75eb_4dca_1359_78a3,
+    0x0070_0a4d_4141_d8ab,
+    0x8cc7_4079_7779_e898,
+    0x5203_6cee_2b6f_fe73,
 ]);
 
 // `2*d`
 const EDWARDS_D2: Fq = Fq::from_raw([
-    0x020c_bfad_ac68_7d62,
-    0x525a_feda_6eaf_3a4c,
-    0xebfb_240f_cd7a_ffa8,
-    0x5526_31ce_97f4_5691,
+    0xebd6_9b94_26b2_f159,
+    0x00e0_149a_8283_b156,
+    0x198e_80f2_eef3_d130,
+    0x2406_d9dc_56df_fce7,
 ]);
 
 impl AffinePoint {
