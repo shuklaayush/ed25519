@@ -1188,7 +1188,9 @@ where
     where
         I: Iterator<Item = T>,
     {
-        iter.fold(SubgroupPointAffine(AffinePoint::identity()), |acc, item| acc + item.borrow())
+        iter.fold(SubgroupPointAffine(AffinePoint::identity()), |acc, item| {
+            acc + item.borrow()
+        })
     }
 }
 
@@ -1511,7 +1513,23 @@ impl Group for SubgroupPoint {
     }
 
     fn generator() -> Self {
-        ExtendedPoint::generator().clear_cofactor()
+        SubgroupPoint(
+            (AffinePoint {
+                u: Fq::from_raw([
+                    0xfef6_e61f_01ae_05e2,
+                    0x1c0d_964b_dd30_bc07,
+                    0xf448_af58_b1ef_2831,
+                    0x68fe_bfd4_2613_608e,
+                ]),
+                v: Fq::from_raw([
+                    0x0000_0000_0000_0003,
+                    0x0000_0000_0000_0000,
+                    0x0000_0000_0000_0000,
+                    0x0000_0000_0000_0000,
+                ]),
+            })
+            .to_extended(),
+        )
     }
 
     fn is_identity(&self) -> Choice {
@@ -1640,16 +1658,16 @@ impl PrimeCurveAffine for SubgroupPointAffine {
     fn generator() -> Self {
         SubgroupPointAffine(AffinePoint {
             u: Fq::from_raw([
-                0xfef6_e61f_01ae_05e2,
-                0x1c0d_964b_dd30_bc07,
-                0xf448_af58_b1ef_2831,
-                0x68fe_bfd4_2613_608e,
+                0xc956_2d60_8f25_d51a,
+                0x692c_c760_9525_a7b2,
+                0xc0a4_e231_fdd6_dc5c,
+                0x2169_36d3_cd6e_53fe,
             ]),
             v: Fq::from_raw([
-                0x0000_0000_0000_0003,
-                0x0000_0000_0000_0000,
-                0x0000_0000_0000_0000,
-                0x0000_0000_0000_0000,
+                0x6666_6666_6666_6658,
+                0x6666_6666_6666_6666,
+                0x6666_6666_6666_6666,
+                0x6666_6666_6666_6666,
             ]),
         })
     }
