@@ -44,7 +44,7 @@ use core::ops::{Add, AddAssign, Mul, MulAssign, Neg, Sub, SubAssign};
 use ff::{BatchInverter, Field};
 use group::{
     cofactor::{CofactorCurve, CofactorCurveAffine, CofactorGroup},
-    prime::PrimeGroup,
+    prime::{PrimeCurve, PrimeCurveAffine, PrimeGroup},
     Curve, Group, GroupEncoding,
 };
 use rand_core::RngCore;
@@ -1031,6 +1031,26 @@ impl<'a, 'b> Sub<&'b AffinePoint> for &'a ExtendedPoint {
 
 impl_binops_additive!(ExtendedPoint, AffinePoint);
 
+impl<'a, 'b> Add<&'b AffinePoint> for &'a AffinePoint {
+    type Output = AffinePoint;
+
+    #[inline]
+    fn add(self, other: &'b AffinePoint) -> AffinePoint {
+        (self.to_extended() + &other.to_extended()).into()
+    }
+}
+
+impl<'a, 'b> Sub<&'b AffinePoint> for &'a AffinePoint {
+    type Output = AffinePoint;
+
+    #[inline]
+    fn sub(self, other: &'b AffinePoint) -> AffinePoint {
+        (self.to_extended() - &other.to_extended()).into()
+    }
+}
+
+impl_binops_additive!(AffinePoint, AffinePoint);
+
 /// This is a "completed" point produced during a point doubling or
 /// addition routine. These points exist in the `(U:Z, V:T)` model
 /// of the curve. This is not exposed in the API because it is
@@ -1118,6 +1138,118 @@ impl<'a, 'b> Mul<&'b Fr> for &'a AffinePoint {
 
 impl_binops_multiplicative_mixed!(AffinePoint, Fr, ExtendedPoint);
 
+/// This represents a point in the prime-order subgroup of Ed25519, in affine
+/// coordinates.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct SubgroupPointAffine(AffinePoint);
+
+impl From<SubgroupPointAffine> for AffinePoint {
+    fn from(val: SubgroupPointAffine) -> AffinePoint {
+        val.0
+    }
+}
+
+impl<'a> From<&'a SubgroupPointAffine> for &'a AffinePoint {
+    fn from(val: &'a SubgroupPointAffine) -> &'a AffinePoint {
+        &val.0
+    }
+}
+
+impl fmt::Display for SubgroupPointAffine {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl ConditionallySelectable for SubgroupPointAffine {
+    fn conditional_select(a: &Self, b: &Self, choice: Choice) -> Self {
+        SubgroupPointAffine(AffinePoint::conditional_select(&a.0, &b.0, choice))
+    }
+}
+
+impl SubgroupPointAffine {
+    /// Constructs an AffinePoint given `u` and `v` without checking that the point is on
+    /// the curve or in the prime-order subgroup.
+    ///
+    /// This should only be used for hard-coding constants (e.g. fixed generators); in all
+    /// other cases, use [`SubgroupPointAffine::from_bytes`] instead.
+    ///
+    /// [`SubgroupPointAffine::from_bytes`]: SubgroupPointAffine#impl-GroupEncoding
+    pub const fn from_raw_unchecked(u: Fq, v: Fq) -> Self {
+        SubgroupPointAffine(AffinePoint::from_raw_unchecked(u, v))
+    }
+}
+
+impl<T> Sum<T> for SubgroupPointAffine
+where
+    T: Borrow<SubgroupPointAffine>,
+{
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = T>,
+    {
+        iter.fold(SubgroupPointAffine(AffinePoint::identity()), |acc, item| acc + item.borrow())
+    }
+}
+
+impl Neg for SubgroupPointAffine {
+    type Output = SubgroupPointAffine;
+
+    #[inline]
+    fn neg(self) -> SubgroupPointAffine {
+        SubgroupPointAffine(-self.0)
+    }
+}
+
+impl Neg for &SubgroupPointAffine {
+    type Output = SubgroupPointAffine;
+
+    #[inline]
+    fn neg(self) -> SubgroupPointAffine {
+        SubgroupPointAffine(-self.0)
+    }
+}
+
+impl<'a, 'b> Add<&'b SubgroupPointAffine> for &'a AffinePoint {
+    type Output = AffinePoint;
+
+    #[inline]
+    fn add(self, other: &'b SubgroupPointAffine) -> AffinePoint {
+        self + &other.0
+    }
+}
+
+impl<'a, 'b> Sub<&'b SubgroupPointAffine> for &'a AffinePoint {
+    type Output = AffinePoint;
+
+    #[inline]
+    fn sub(self, other: &'b SubgroupPointAffine) -> AffinePoint {
+        self - &other.0
+    }
+}
+
+impl_binops_additive!(AffinePoint, SubgroupPointAffine);
+
+impl<'a, 'b> Add<&'b SubgroupPointAffine> for &'a SubgroupPointAffine {
+    type Output = SubgroupPointAffine;
+
+    #[inline]
+    fn add(self, other: &'b SubgroupPointAffine) -> SubgroupPointAffine {
+        SubgroupPointAffine(self.0 + &other.0)
+    }
+}
+
+impl<'a, 'b> Sub<&'b SubgroupPointAffine> for &'a SubgroupPointAffine {
+    type Output = SubgroupPointAffine;
+
+    #[inline]
+    fn sub(self, other: &'b SubgroupPointAffine) -> SubgroupPointAffine {
+        SubgroupPointAffine(self.0 - &other.0)
+    }
+}
+
+impl_binops_additive!(SubgroupPointAffine, SubgroupPointAffine);
+
 /// This represents a point in the prime-order subgroup of Ed25519, in extended
 /// coordinates.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1157,6 +1289,33 @@ impl SubgroupPoint {
     /// [`SubgroupPoint::from_bytes`]: SubgroupPoint#impl-GroupEncoding
     pub const fn from_raw_unchecked(u: Fq, v: Fq) -> Self {
         SubgroupPoint(AffinePoint::from_raw_unchecked(u, v).to_extended())
+    }
+
+    /// This takes a mutable slice of `ExtendedPoint`s and "normalizes" them using
+    /// only a single inversion for the entire batch. This normalization results in
+    /// all of the points having a Z-coordinate of one. Further, an iterator is
+    /// returned which can be used to obtain `AffinePoint`s for each element in the
+    /// slice.
+    ///
+    /// This costs 5 multiplications per element, and a field inversion.
+    fn batch_normalize(p: &[Self], q: &mut [SubgroupPointAffine]) {
+        assert_eq!(p.len(), q.len());
+
+        for (p, q) in p.iter().zip(q.iter_mut()) {
+            // We use the `u` field of `AffinePoint` to store the z-coordinate being
+            // inverted, and the `v` field for scratch space.
+            q.0.u = p.0.z;
+        }
+
+        BatchInverter::invert_with_internal_scratch(q, |q| &mut q.0.u, |q| &mut q.0.v);
+
+        for (p, q) in p.iter().zip(q.iter_mut()).rev() {
+            let tmp = q.0.u;
+
+            // Set the coordinates to the correct value
+            q.0.u = p.0.u * &tmp; // Multiply by 1/z
+            q.0.v = p.0.v * &tmp; // Multiply by 1/z
+        }
     }
 }
 
@@ -1230,15 +1389,63 @@ impl<'a, 'b> Sub<&'b SubgroupPoint> for &'a SubgroupPoint {
 
 impl_binops_additive!(SubgroupPoint, SubgroupPoint);
 
+impl<'a, 'b> Add<&'b SubgroupPointAffine> for &'a SubgroupPoint {
+    type Output = SubgroupPoint;
+
+    #[inline]
+    fn add(self, other: &'b SubgroupPointAffine) -> SubgroupPoint {
+        SubgroupPoint(self.0 + other.0)
+    }
+}
+
+impl<'a, 'b> Sub<&'b SubgroupPointAffine> for &'a SubgroupPoint {
+    type Output = SubgroupPoint;
+
+    #[inline]
+    fn sub(self, other: &'b SubgroupPointAffine) -> SubgroupPoint {
+        SubgroupPoint(self.0 - other.0)
+    }
+}
+
+impl_binops_additive!(SubgroupPoint, SubgroupPointAffine);
+
 impl<'a, 'b> Mul<&'b Fr> for &'a SubgroupPoint {
     type Output = SubgroupPoint;
 
     fn mul(self, other: &'b Fr) -> SubgroupPoint {
-        SubgroupPoint(self.0.multiply(&other.to_bytes()))
+        SubgroupPoint(self.0 * other)
     }
 }
 
 impl_binops_multiplicative!(SubgroupPoint, Fr);
+
+impl<'a, 'b> Mul<&'b Fr> for &'a SubgroupPointAffine {
+    type Output = SubgroupPoint;
+
+    fn mul(self, other: &'b Fr) -> SubgroupPoint {
+        SubgroupPoint(self.0 * other)
+    }
+}
+
+impl_binops_multiplicative_mixed!(SubgroupPointAffine, Fr, SubgroupPoint);
+
+impl From<SubgroupPointAffine> for SubgroupPoint {
+    fn from(affine: SubgroupPointAffine) -> SubgroupPoint {
+        SubgroupPoint(affine.0.to_extended())
+    }
+}
+
+impl<'a> From<&'a SubgroupPoint> for SubgroupPointAffine {
+    fn from(extended: &'a SubgroupPoint) -> SubgroupPointAffine {
+        SubgroupPointAffine(extended.0.to_affine())
+    }
+}
+
+impl From<SubgroupPoint> for SubgroupPointAffine {
+    fn from(extended: SubgroupPoint) -> SubgroupPointAffine {
+        SubgroupPointAffine::from(extended.to_affine())
+    }
+}
 
 impl Group for ExtendedPoint {
     type Scalar = Fr;
@@ -1355,6 +1562,18 @@ impl CofactorGroup for ExtendedPoint {
     }
 }
 
+impl Curve for SubgroupPoint {
+    type AffineRepr = SubgroupPointAffine;
+
+    fn batch_normalize(p: &[Self], q: &mut [Self::AffineRepr]) {
+        Self::batch_normalize(p, q);
+    }
+
+    fn to_affine(&self) -> Self::AffineRepr {
+        SubgroupPointAffine(self.0.into())
+    }
+}
+
 impl Curve for ExtendedPoint {
     type AffineRepr = AffinePoint;
 
@@ -1365,6 +1584,10 @@ impl Curve for ExtendedPoint {
     fn to_affine(&self) -> Self::AffineRepr {
         self.into()
     }
+}
+
+impl PrimeCurve for SubgroupPoint {
+    type Affine = SubgroupPointAffine;
 }
 
 impl CofactorCurve for ExtendedPoint {
@@ -1399,6 +1622,40 @@ impl CofactorCurveAffine for AffinePoint {
 
     fn is_identity(&self) -> Choice {
         self.is_identity()
+    }
+
+    fn to_curve(&self) -> Self::Curve {
+        (*self).into()
+    }
+}
+
+impl PrimeCurveAffine for SubgroupPointAffine {
+    type Scalar = Fr;
+    type Curve = SubgroupPoint;
+
+    fn identity() -> Self {
+        SubgroupPointAffine(AffinePoint::identity())
+    }
+
+    fn generator() -> Self {
+        SubgroupPointAffine(AffinePoint {
+            u: Fq::from_raw([
+                0xfef6_e61f_01ae_05e2,
+                0x1c0d_964b_dd30_bc07,
+                0xf448_af58_b1ef_2831,
+                0x68fe_bfd4_2613_608e,
+            ]),
+            v: Fq::from_raw([
+                0x0000_0000_0000_0003,
+                0x0000_0000_0000_0000,
+                0x0000_0000_0000_0000,
+                0x0000_0000_0000_0000,
+            ]),
+        })
+    }
+
+    fn is_identity(&self) -> Choice {
+        self.0.is_identity()
     }
 
     fn to_curve(&self) -> Self::Curve {
@@ -1452,6 +1709,22 @@ impl GroupEncoding for AffinePoint {
 
     fn to_bytes(&self) -> Self::Repr {
         self.to_bytes()
+    }
+}
+
+impl GroupEncoding for SubgroupPointAffine {
+    type Repr = [u8; 32];
+
+    fn from_bytes(bytes: &Self::Repr) -> CtOption<Self> {
+        AffinePoint::from_bytes(*bytes).map(SubgroupPointAffine)
+    }
+
+    fn from_bytes_unchecked(bytes: &Self::Repr) -> CtOption<Self> {
+        Self::from_bytes(&*bytes)
+    }
+
+    fn to_bytes(&self) -> Self::Repr {
+        self.0.to_bytes()
     }
 }
 
