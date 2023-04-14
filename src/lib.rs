@@ -16,6 +16,8 @@
 //!
 //! This crate uses the `subtle` crate to perform constant-time operations.
 
+// TODO: Remove cofactor group and only keep functionality related to prime group
+//       remove full generator etc.
 // TODO: Uncomment
 // #![no_std]
 // Catch documentation errors caused by code changes.
@@ -487,6 +489,7 @@ impl AffinePoint {
     ///
     /// See [ZIP 216](https://zips.z.cash/zip-0216) for a more detailed description of the
     /// bug, as well as its fix.
+    // TODO: Remove?
     pub fn from_bytes_pre_zip216_compatibility(b: [u8; 32]) -> CtOption<Self> {
         Self::from_bytes_inner(b, 0.into())
     }
@@ -1513,23 +1516,7 @@ impl Group for SubgroupPoint {
     }
 
     fn generator() -> Self {
-        SubgroupPoint(
-            (AffinePoint {
-                u: Fq::from_raw([
-                    0xfef6_e61f_01ae_05e2,
-                    0x1c0d_964b_dd30_bc07,
-                    0xf448_af58_b1ef_2831,
-                    0x68fe_bfd4_2613_608e,
-                ]),
-                v: Fq::from_raw([
-                    0x0000_0000_0000_0003,
-                    0x0000_0000_0000_0000,
-                    0x0000_0000_0000_0000,
-                    0x0000_0000_0000_0000,
-                ]),
-            })
-            .to_extended(),
-        )
+        SubgroupPointAffine::generator().into()
     }
 
     fn is_identity(&self) -> Choice {
