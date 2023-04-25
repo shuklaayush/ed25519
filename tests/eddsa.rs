@@ -63,24 +63,24 @@ fn sign(s: Fr, prefix: [u8; 32], A_bytes: [u8; 32], msg: &[u8]) -> ([u8; 32], [u
 
     let s_bytes = (r + s * k).to_bytes();
 
-    (s_bytes, R_bytes)
+    (R_bytes, s_bytes)
 }
 
-fn verify(s_bytes: [u8; 32], R_bytes: [u8; 32], A_bytes: [u8; 32], msg: &[u8]) -> Choice {
+fn verify(R_bytes: [u8; 32], s_bytes: [u8; 32], A_bytes: [u8; 32], msg: &[u8]) -> Choice {
     let k = hash_to_fr(
         Sha512::default()
             .chain(&R_bytes[..])
             .chain(&A_bytes[..])
             .chain(msg),
     );
-    verify_prehashed(s_bytes, R_bytes, A_bytes, k)
+    verify_prehashed(R_bytes, s_bytes, A_bytes, k)
 }
 
-fn verify_prehashed(s_bytes: [u8; 32], R_bytes: [u8; 32], A_bytes: [u8; 32], k: Fr) -> Choice {
-    // `s_bytes` MUST represent an integer less than the prime `l`.
-    let s = Fr::from_bytes(&s_bytes).unwrap();
+fn verify_prehashed(R_bytes: [u8; 32], s_bytes: [u8; 32], A_bytes: [u8; 32], k: Fr) -> Choice {
     // `R_bytes` MUST be an encoding of a point on the twisted Edwards form of Curve25519.
     let R = ExtendedPoint::from_bytes(&R_bytes).unwrap();
+    // `s_bytes` MUST represent an integer less than the prime `l`.
+    let s = Fr::from_bytes(&s_bytes).unwrap();
     // `A_bytes` MUST be an encoding of a point on the twisted Edwards form of Curve25519.
     let A = ExtendedPoint::from_bytes(&A_bytes).unwrap();
 
@@ -110,10 +110,10 @@ fn eddsa_example() {
         // Suppose `m` is the message
         let msg = b"test message";
 
-        let (s_bytes, R_bytes) = sign(s, prefix, A_bytes, msg);
+        let (R_bytes, s_bytes) = sign(s, prefix, A_bytes, msg);
 
         // Verify the signature
-        assert!(bool::from(verify(s_bytes, R_bytes, A_bytes, msg)));
+        assert!(bool::from(verify(R_bytes, s_bytes, A_bytes, msg)));
     }
 }
 
@@ -141,7 +141,7 @@ fn test_vector_1() {
     let (s, prefix, A_bytes) = seed_to_key(secret_key);
     assert_eq!(A_bytes, public_key);
 
-    let (s_bytes, R_bytes) = sign(s, prefix, A_bytes, message);
+    let (R_bytes, s_bytes) = sign(s, prefix, A_bytes, message);
 
     let signature_bytes = {
         let mut sig = [0u8; 64];
@@ -152,7 +152,7 @@ fn test_vector_1() {
 
     assert_eq!(signature_bytes, signature);
 
-    assert!(bool::from(verify(s_bytes, R_bytes, A_bytes, message)));
+    assert!(bool::from(verify(R_bytes, s_bytes, A_bytes, message)));
 }
 
 #[test]
@@ -179,7 +179,7 @@ fn test_vector_2() {
     let (s, prefix, A_bytes) = seed_to_key(secret_key);
     assert_eq!(A_bytes, public_key);
 
-    let (s_bytes, R_bytes) = sign(s, prefix, A_bytes, &message);
+    let (R_bytes, s_bytes) = sign(s, prefix, A_bytes, &message);
 
     let signature_bytes = {
         let mut sig = [0u8; 64];
@@ -190,5 +190,7 @@ fn test_vector_2() {
 
     assert_eq!(signature_bytes, signature);
 
-    assert!(bool::from(verify(s_bytes, R_bytes, A_bytes, &message)));
+    assert!(bool::from(verify(R_bytes, s_bytes, A_bytes, &message)));
 }
+
+// TODO: Add other test vectors
